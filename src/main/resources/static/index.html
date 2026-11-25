@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>课程知识库问答 · B1</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --line:#e3e6ef; --accent:#2f6fed; --muted:#6b7280; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:#1f2430; }
+  header { padding:18px 24px; background:#fff; border-bottom:1px solid var(--line); font-weight:600; font-size:18px; }
+  header .badge { font-size:12px; font-weight:500; color:var(--accent); background:#eaf1ff; padding:2px 8px; border-radius:10px; margin-left:8px; }
+  main { max-width:880px; margin:20px auto 60px; padding:0 16px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  h2 { font-size:14px; color:var(--muted); margin:0 0 10px; font-weight:600; }
+  input[type=text] { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:15px; }
+  button { padding:9px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { background:#9db4e8; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .row input[type=text] { flex:1; }
+  #docs { margin-top:10px; font-size:13px; color:var(--muted); }
+  #docs .doc { display:flex; justify-content:space-between; padding:4px 0; border-top:1px dashed var(--line); }
+  #answer { white-space:pre-wrap; margin-top:14px; min-height:24px; }
+  #answer:empty::before { content:"回答会在这里逐字出现…"; color:#aab; }
+  #cites { margin:14px 0 0; padding-left:20px; font-size:13px; color:#39405a; }
+  #cites li { margin-bottom:8px; }
+  #cites .meta { color:var(--muted); font-size:12px; }
+  .status { font-size:12px; color:var(--muted); margin-left:8px; }
+</style>
+</head>
+<body>
+<header>课程知识库问答<span class="badge">B1 · RAG</span></header>
+<main>
+  <section class="card">
+    <h2>1. 课程资料</h2>
+    <div class="row">
+      <input type="file" id="file" accept=".md,.txt,.pdf,.docx">
+      <button id="upload">上传并索引</button>
+    </div>
+    <div id="docs">加载中…</div>
+  </section>
+
+  <section class="card">
+    <h2>2. 提问<span id="status" class="status"></span></h2>
+    <div class="row">
+      <input type="text" id="q" placeholder="例如：能源大数据的关键技术包括哪些？">
+      <button id="ask">提问</button>
+      <button id="newchat" class="ghost" title="清除上下文，重新开始">新会话</button>
+    </div>
+    <div id="answer"></div>
+    <ol id="cites"></ol>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+// 会话：同一 sessionId 下服务端会保留最近 3 轮，用于指代消解
+let sessionId = localStorage.getItem('qa_sid');
+if (!sessionId) {
+  sessionId = 's_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('qa_sid', sessionId);
+}
+
+async function loadDocs() {
+  const res = await fetch('/api/documents');
+  const data = await res.json();
+  const box = $('#docs');
+  if (!data.total) {
+    box.textContent = '还没有资料，先上传一个 .md 或 .txt 文件。';
+    return;
+  }
+  box.innerHTML = `<div>共 ${data.total} 篇 / ${data.chunkCount} 个文本块</div>` +
+    data.documents.map(d => `<div class="doc"><span>${d.fileName}</span><span>${d.chunks} 块</span></div>`).join('');
+}
+
+$('#upload').onclick = async () => {
+  const f = $('#file').files[0];
+  if (!f) { alert('先选一个文件'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  $('#upload').disabled = true;
+  try {
+    const res = await fetch('/api/documents', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || res.status);
+    await loadDocs();
+  } catch (e) {
+    alert('上传失败: ' + e.message);
+  } finally {
+    $('#upload').disabled = false;
+  }
+};
+
+$('#ask').onclick = async () => {
+  const question = $('#q').value.trim();
+  if (!question) { return; }
+  $('#answer').textContent = '';
+  $('#cites').innerHTML = '';
+  $('#status').textContent = '';
+  $('#ask').disabled = true;
+  const started = performance.now();
+  try {
+    const res = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, sessionId })
+    });
+    if (!res.ok || !res.body) { throw new Error('HTTP ' + res.status); }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop();
+      for (const block of blocks) {
+        let event = 'message';
+        let dataLine = '';
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+        }
+        if (!dataLine) continue;
+        const data = JSON.parse(dataLine);
+        if (event === 'meta') {
+          if (data.sessionId) { sessionId = data.sessionId; localStorage.setItem('qa_sid', sessionId); }
+          $('#status').textContent = `· ${data.mode}，命中 ${data.retrieved} 块，上下文 ${data.historyTurns || 0} 轮`;
+        } else if (event === 'delta') {
+          $('#answer').textContent += data.text;
+        } else if (event === 'citation') {
+          const li = document.createElement('li');
+          li.innerHTML = `<span class="meta">《${data.docName}》第 ${data.chunkIndex} 块 · 相似度 ${data.score}</span><div>${data.snippet}</div>`;
+          $('#cites').appendChild(li);
+        } else if (event === 'done') {
+          const ms = Math.round(performance.now() - started);
+          $('#status').textContent = `· ${data.status === 'refused' ? '拒答' : '完成'}，首字 ${data.firstTokenMs}ms，总 ${ms}ms`;
+        } else if (event === 'error') {
+          $('#status').textContent = '· 出错：' + data.message;
+        }
+      }
+    }
+  } catch (e) {
+    $('#status').textContent = '· 请求失败：' + e.message;
+  } finally {
+    $('#ask').disabled = false;
+  }
+};
+
+$('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#ask').click(); });
+
+$('#newchat').onclick = () => {
+  sessionId = 's_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('qa_sid', sessionId);
+  $('#answer').textContent = '';
+  $('#cites').innerHTML = '';
+  $('#status').textContent = '· 已开始新会话';
+};
+
+loadDocs();
+</script>
+</body>
+</html>

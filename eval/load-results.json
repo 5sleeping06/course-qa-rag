@@ -1,0 +1,104 @@
+{
+  "server_only": [
+    {
+      "concurrency": 1,
+      "requests": 10,
+      "seconds": 0.32,
+      "qps": 31.27,
+      "ok": 10,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 28,
+      "p95": 129,
+      "p99": 129,
+      "errors": []
+    },
+    {
+      "concurrency": 5,
+      "requests": 50,
+      "seconds": 0.12,
+      "qps": 431.57,
+      "ok": 50,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 9,
+      "p95": 19,
+      "p99": 29,
+      "errors": []
+    },
+    {
+      "concurrency": 20,
+      "requests": 100,
+      "seconds": 0.09,
+      "qps": 1152.5,
+      "ok": 100,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 10,
+      "p95": 39,
+      "p99": 56,
+      "errors": []
+    }
+  ],
+  "end_to_end": [
+    {
+      "concurrency": 1,
+      "requests": 10,
+      "seconds": 15.79,
+      "qps": 0.63,
+      "ok": 10,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 1549,
+      "p95": 2528,
+      "p99": 2528,
+      "errors": []
+    },
+    {
+      "concurrency": 5,
+      "requests": 20,
+      "seconds": 6.53,
+      "qps": 3.06,
+      "ok": 20,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 1620,
+      "p95": 2506,
+      "p99": 2506,
+      "errors": []
+    },
+    {
+      "concurrency": 10,
+      "requests": 20,
+      "seconds": 4.15,
+      "qps": 4.82,
+      "ok": 20,
+      "rate_limited": 0,
+      "failed": 0,
+      "error_rate": 0.0,
+      "p50": 1558,
+      "p95": 2825,
+      "p99": 2825,
+      "errors": []
+    }
+  ],
+  "rate_limit": {
+    "concurrency": 10,
+    "requests": 40,
+    "seconds": 6.13,
+    "qps": 6.53,
+    "ok": 32,
+    "rate_limited": 8,
+    "failed": 0,
+    "error_rate": 0.0,
+    "p50": 1484,
+    "p95": 2142,
+    "p99": 2213,
+    "errors": []
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "chunk": [
+    {
+      "chunk_size": 300,
+      "overlap": 37,
+      "chunks": 780,
+      "answered_accuracy": 0.955,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1085,
+      "p95_ms": 1580,
+      "failed": [
+        "E04:命中 2/3 要点，缺: 多轮波及"
+      ]
+    },
+    {
+      "chunk_size": 400,
+      "overlap": 50,
+      "chunks": 587,
+      "answered_accuracy": 0.955,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1099,
+      "p95_ms": 1543,
+      "failed": [
+        "E04:命中 2/3 要点，缺: 多轮波及"
+      ]
+    },
+    {
+      "chunk_size": 600,
+      "overlap": 75,
+      "chunks": 392,
+      "answered_accuracy": 1.0,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1118,
+      "p95_ms": 1636,
+      "failed": []
+    },
+    {
+      "chunk_size": 800,
+      "overlap": 100,
+      "chunks": 295,
+      "answered_accuracy": 1.0,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1053,
+      "p95_ms": 1763,
+      "failed": []
+    }
+  ],
+  "topk": [
+    {
+      "top_k": 3,
+      "chunks": 587,
+      "answered_accuracy": 0.955,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 810,
+      "p95_ms": 1264,
+      "failed": [
+        "E04:命中 2/3 要点，缺: 多轮波及"
+      ]
+    },
+    {
+      "top_k": 5,
+      "chunks": 587,
+      "answered_accuracy": 0.955,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1003,
+      "p95_ms": 1732,
+      "failed": [
+        "E04:命中 2/3 要点，缺: 多轮波及"
+      ]
+    },
+    {
+      "top_k": 8,
+      "chunks": 587,
+      "answered_accuracy": 0.909,
+      "refusal_accuracy": 1.0,
+      "citation_hit": 0.955,
+      "p50_ms": 1119,
+      "p95_ms": 1974,
+      "failed": [
+        "E04:命中 2/3 要点，缺: 多轮波及",
+        "E18:期望 answered，实际 refused"
+      ]
+    }
+  ]
+}

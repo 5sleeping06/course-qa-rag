@@ -1,0 +1,49 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: course-qa
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+  mvc:
+    async:
+      request-timeout: 300000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+qa:
+  # 分块参数：D6 会扫 300 / 600 / 800 做对比实验
+  chunk-size: 400
+  chunk-overlap: 50
+
+  # 检索模式：
+  #   bm25   —— 词法检索，离线、可解释（DeepSeek 无 embedding 接口，故为默认）
+  #   vector —— 余弦检索，需要接入 OpenAI 兼容的 embedding 服务后才有意义
+  retrieval-mode: ${QA_RETRIEVAL_MODE:bm25}
+  top-k: 5
+  bm25-min-score: ${QA_BM25_MIN_SCORE:3.0}
+  min-score: 0.45
+
+  # mock  = 离线抽取式回答，不需要 Key，用于冒烟与断网演示
+  # openai = OpenAI 兼容接口（DeepSeek / 通义 / Kimi / Ollama）
+  llm-mode: ${QA_LLM_MODE:mock}
+  llm-base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+  llm-api-key: ${LLM_API_KEY:}
+  llm-model: ${LLM_MODEL:deepseek-chat}
+  temperature: 0.2
+  max-context-chars: 3000
+  history-turns: 3
+
+  # 限流：默认 30 次/分钟（容量 30，每秒补 0.5 个令牌）
+  # 压测时用 --qa.rate-limit.enabled=false 关闭
+  rate-limit-enabled: ${QA_RATE_LIMIT:true}
+  rate-limit-capacity: 30
+  rate-limit-refill-per-second: 0.5

@@ -1,0 +1,40 @@
+# ---------- 构建产物 ----------
+target/
+*.class
+*.jar
+
+# ---------- 运行期数据 ----------
+# 索引与上传内容：体积大且可由 materials 重建
+data/
+
+# 课程资料原件：版权原因不入库，本地保留
+materials/
+
+# ---------- 密钥与本地配置 ----------
+.env
+*.local.yml
+application-local.yml
+
+# ---------- 本机环境专用（不入库） ----------
+.tools/
+smoke/
+install-docker*.ps1
+install-docker*.cmd
+install-maven.ps1
+install-docker.log
+docker-install-trace.log
+*.log
+
+# ---------- 一次性辅助脚本 ----------
+build_*.py
+extract_docx.py
+fetch_maven.py
+fix_encoding.py
+probe_*.py
+speedtest_mirrors.py
+check_http.py
+
+# ---------- IDE ----------
+.idea/
+*.iml
+.vscode/
