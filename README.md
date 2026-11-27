@@ -67,6 +67,9 @@ $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Env
 
 **离线模式**（不花钱、断网可用）：双击 `start.cmd`。
 
+> ⚠️ `start.cmd` 是 mock 模式：它**不调用大模型**，只是把检索到的原文片段抄一段，
+> 不具备归纳与比较能力，不能用来评价回答质量。看效果请用 `start-ai.cmd`。
+
 批量入库与实测：
 
 ```powershell
@@ -134,6 +137,12 @@ topK 从 5 加到 8 反而更差（答对率 95.5% → 90.9%，P50 涨 38%）—
 python eval/sweep.py          # 重跑扫描（约 5 分钟，会自动起停服务）
 python eval/make_charts.py    # 重新出图
 ```
+
+## 一次 badcase 的排查记录
+
+用户反馈「能源大数据的关键技术包括哪些」答偏，排查出三个叠加问题（启动方式用错 mock、
+PPT 页眉噪声、答案横跨多块），修复四项并做了回归。
+详见 [eval/BADCASE-2026-11-27.md](<eval/BADCASE-2026-11-27.md>)。
 
 ## 评测怎么跑
 

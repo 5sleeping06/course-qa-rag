@@ -23,24 +23,73 @@ import java.util.Locale;
  */
 public final class DocumentParser {
 
+    /** 同一行重复超过该次数，视为模板（页眉/导航条）。 */
+    private static final int REPEAT_THRESHOLD = 3;
+    private static final int REPEAT_MAX_LEN = 60;
+    private static final String[] FIXED_NOISE = {"China University of Mining"};
+
     private DocumentParser() {
     }
 
     public static String extract(String fileName, byte[] bytes) throws IOException {
         String lower = fileName.toLowerCase(Locale.ROOT);
+        String raw;
         if (lower.endsWith(".pdf")) {
-            return fromPdf(bytes);
-        }
-        if (lower.endsWith(".docx")) {
-            return fromDocx(bytes);
-        }
-        if (lower.endsWith(".doc")) {
+            raw = fromPdf(bytes);
+        } else if (lower.endsWith(".docx")) {
+            raw = fromDocx(bytes);
+        } else if (lower.endsWith(".doc")) {
             throw new IllegalArgumentException("暂不支持旧版 .doc，请另存为 .docx 后上传");
+        } else if (lower.endsWith(".txt") || lower.endsWith(".md")) {
+            raw = decode(bytes);
+        } else {
+            throw new IllegalArgumentException("不支持的文件类型: " + fileName + "（支持 .txt/.md/.pdf/.docx）");
         }
-        if (lower.endsWith(".txt") || lower.endsWith(".md")) {
-            return decode(bytes);
+        return stripBoilerplate(raw);
+    }
+
+    /**
+     * 去掉 PPT 转文本时反复出现的页眉/导航条。
+     *
+     * 为什么必须做：课件每页都带着「中国矿业大学 / 第二章能源大数据关键技术与管理应用 / 2.1…2.6」
+     * 这类模板行，它们恰好包含「能源大数据」「关键技术」，会让检索把它们当成高相关内容，
+     * 实测中封面块一度排到第 2 位、真正讲采集/存储/分析的块被挤掉。
+     * 判定规则：同一行在同一文档中出现 ≥3 次且长度 ≤60 字，视为模板行。
+     */
+    private static String stripBoilerplate(String text) {
+        String[] lines = text.split("\n", -1);
+        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
+        for (String line : lines) {
+            String key = line.trim();
+            if (!key.isEmpty() && key.length() <= REPEAT_MAX_LEN) {
+                freq.merge(key, 1, Integer::sum);
+            }
         }
-        throw new IllegalArgumentException("不支持的文件类型: " + fileName + "（支持 .txt/.md/.pdf/.docx）");
+        StringBuilder sb = new StringBuilder(text.length());
+        for (String line : lines) {
+            String key = line.trim();
+            if (isFixedNoise(key)) {
+                continue;
+            }
+            if (!key.isEmpty() && key.length() <= REPEAT_MAX_LEN
+                    && freq.getOrDefault(key, 0) >= REPEAT_THRESHOLD) {
+                continue;
+            }
+            sb.append(line).append('\n');
+        }
+        return sb.toString().replaceAll("\n{3,}", "\n\n").trim();
+    }
+
+    private static boolean isFixedNoise(String line) {
+        if (line.isEmpty()) {
+            return false;
+        }
+        for (String noise : FIXED_NOISE) {
+            if (line.contains(noise)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String decode(byte[] bytes) {

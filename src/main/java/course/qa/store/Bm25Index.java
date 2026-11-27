@@ -8,8 +8,10 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * BM25 词法检索。
@@ -51,6 +53,7 @@ public class Bm25Index {
         }
 
         int total = entries.size();
+        Map<String, Double> docBoost = docTitleBoost(queryTf.keySet());
         List<ScoredChunk> scored = new ArrayList<>();
         for (Entry e : entries) {
             double score = 0.0;
@@ -64,6 +67,7 @@ public class Bm25Index {
                 double denom = tf + K1 * (1 - B + B * e.length() / avgLength);
                 score += idf * (tf * (K1 + 1)) / denom;
             }
+            score *= docBoost.getOrDefault(e.chunk().docName(), 1.0);
             if (score > 0 && score >= minScore) {
                 scored.add(new ScoredChunk(e.chunk(), Math.round(score * 1000) / 1000.0));
             }
@@ -72,6 +76,36 @@ public class Bm25Index {
                 .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(Math.max(1, topK))
                 .toList();
+    }
+
+    /**
+     * 文档标题加权：问题与文件名重合度越高，该文档的块越优先。
+     *
+     * 为什么需要：语料里有两份课件都讲「关键技术」，一份是《第二章 能源大数据关键技术与管理应用》，
+     * 一份是《企业能源大数据管理》。问「能源大数据的关键技术」时，前者显然更对，但 BM25 只看块内词频，
+     * 分不出这个差别。这里用文件名与查询的词重合度做一个温和的放大（最多 +35%）。
+     */
+    private Map<String, Double> docTitleBoost(Set<String> queryTokens) {
+        Map<String, Double> boost = new HashMap<>();
+        if (queryTokens.isEmpty()) {
+            return boost;
+        }
+        for (Entry e : entries) {
+            String docName = e.chunk().docName();
+            if (boost.containsKey(docName)) {
+                continue;
+            }
+            Set<String> titleTokens = new HashSet<>(Tokenizer.tokenize(docName));
+            int hit = 0;
+            for (String q : queryTokens) {
+                if (titleTokens.contains(q)) {
+                    hit++;
+                }
+            }
+            double ratio = (double) hit / queryTokens.size();
+            boost.put(docName, 1.0 + 0.35 * ratio);
+        }
+        return boost;
     }
 
     private void ensureBuilt() {

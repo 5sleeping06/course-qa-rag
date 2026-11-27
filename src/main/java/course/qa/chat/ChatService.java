@@ -19,6 +19,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -106,7 +108,7 @@ public class ChatService {
         }
         List<Chunk> context = hits.stream().map(ScoredChunk::chunk).toList();
         List<Turn> history = sessions.history(sessionId);
-        String prompt = PromptBuilder.build(question, context, props.getMaxContextChars(), history);
+        String prompt = PromptBuilder.build(question, context, contextBudget(question), history);
 
         StringBuilder answer = new StringBuilder();
         try {
@@ -167,7 +169,7 @@ public class ChatService {
 
             List<Chunk> context = hits.stream().map(ScoredChunk::chunk).toList();
             List<Turn> history = sessions.history(sessionId);
-            String prompt = PromptBuilder.build(question, context, props.getMaxContextChars(), history);
+            String prompt = PromptBuilder.build(question, context, contextBudget(question), history);
             long[] firstToken = {0L};
             StringBuilder collected = new StringBuilder();
 
@@ -207,11 +209,95 @@ public class ChatService {
         }
     }
 
+    /**
+     * 检索：先取比 topK 更多的候选，再做多样性重排。
+     *
+     * 为什么需要：实测提问「能源大数据的关键技术包括哪些」时，Top-5 里有 4 条来自
+     * 同一份文档的相邻块（都在讲物联网/云计算），真正回答「采集/存储/分析/可视化」
+     * 的另一份课件全被挤掉。单看 BM25 分数它们确实更高，但对「列举类」问题来说，
+     * 来源集中意味着信息重复。这里限制每篇文档最多贡献 2 块，并让列举型问题多取候选。
+     */
+    private static final java.util.regex.Pattern ENUMERATION_QUERY =
+            java.util.regex.Pattern.compile("哪些|有什么|包括|包含|分类|类型|几种|列举|有哪");
+
+    private static final int MAX_PER_DOC = 2;
+
     private List<ScoredChunk> retrieve(String query, int topK) {
-        if ("vector".equalsIgnoreCase(props.getRetrievalMode())) {
-            return store.searchVector(Embedding.of(query), topK, props.getMinScore());
+        boolean broad = ENUMERATION_QUERY.matcher(query).find();
+        int candidates = broad ? Math.min(topK * 5, 30) : topK * 3;
+        // 列举类问题需要覆盖同一份资料里的多个小节，所以名额放宽到 8、单文档上限放宽到 3
+        int finalK = broad ? Math.max(topK, 8) : topK;
+        int maxPerDoc = broad ? 3 : MAX_PER_DOC;
+        List<ScoredChunk> raw = "vector".equalsIgnoreCase(props.getRetrievalMode())
+                ? store.searchVector(Embedding.of(query), candidates, props.getMinScore())
+                : bm25.search(query, candidates, props.getBm25MinScore());
+        List<ScoredChunk> hits = diversify(raw, finalK, maxPerDoc);
+        return broad ? expandNeighbors(hits, Math.min(finalK + 3, 11)) : hits;
+    }
+
+    /**
+     * 邻块扩展：命中某小节后，把它前后相邻的块一并带上。
+     *
+     * 为什么需要：第二章的「关键技术」一节横跨 10–17 块，采集、存储、分析、可视化分别落在不同块里，
+     * 而「可视化」块与「关键技术包括哪些」这句话没有任何词重合，BM25 永远排不进候选。
+     * 这类「一问跨多块」的枚举题，单靠打分无法覆盖，必须靠结构相邻性补齐。
+     * 扩展块的分数沿用触发它的那一块，并在引用里如实标注来源。
+     */
+    private List<ScoredChunk> expandNeighbors(List<ScoredChunk> hits, int limit) {
+        if (hits.size() >= limit) {
+            return hits;
         }
-        return bm25.search(query, topK, props.getBm25MinScore());
+        List<ScoredChunk> out = new ArrayList<>(hits);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (ScoredChunk h : hits) {
+            seen.add(h.chunk().docId() + "#" + h.chunk().index());
+        }
+        for (ScoredChunk h : hits) {
+            if (out.size() >= limit) {
+                break;
+            }
+            for (int delta : new int[]{1, -1, 2, -2}) {
+                Chunk nb = store.findChunk(h.chunk().docId(), h.chunk().index() + delta);
+                if (nb != null && seen.add(nb.docId() + "#" + nb.index())) {
+                    out.add(new ScoredChunk(nb, h.score()));
+                    if (out.size() >= limit) {
+                        break;
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** 列举类问题召回更多块，预算相应放宽一倍，否则拼到提示词里会被截断。 */
+    private int contextBudget(String question) {
+        int base = props.getMaxContextChars();
+        return ENUMERATION_QUERY.matcher(question).find() ? base * 2 : base;
+    }
+
+    private static List<ScoredChunk> diversify(List<ScoredChunk> hits, int topK, int maxPerDoc) {
+        Map<String, Integer> perDoc = new HashMap<>();
+        List<ScoredChunk> picked = new ArrayList<>();
+        List<ScoredChunk> overflow = new ArrayList<>();
+        for (ScoredChunk hit : hits) {
+            String docId = hit.chunk().docId();
+            int used = perDoc.getOrDefault(docId, 0);
+            if (used < maxPerDoc && picked.size() < topK) {
+                picked.add(hit);
+                perDoc.put(docId, used + 1);
+            } else {
+                overflow.add(hit);
+            }
+        }
+        for (ScoredChunk hit : overflow) {
+            if (picked.size() >= topK) {
+                break;
+            }
+            picked.add(hit);
+        }
+        return picked.stream()
+                .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
+                .toList();
     }
 
     private List<Citation> toCitations(List<ScoredChunk> hits) {

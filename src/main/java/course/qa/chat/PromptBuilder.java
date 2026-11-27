@@ -47,7 +47,12 @@ public final class PromptBuilder {
         }
         sb.append("资料：\n").append(ctx);
         sb.append("\n问题：").append(question).append('\n');
-        sb.append("\n请只依据上面的资料回答；资料不足就直说，不要编造。结论后请用 [编号] 标注来源。");
+        sb.append("""
+                
+                请只依据上面的资料回答；资料不足就直说，不要编造。结论后请用 [编号] 标注来源。
+                若问题属于「有哪些／包括什么」这类列举题：先点明资料里分了哪几类，再逐条列出每类内容并标注来源；
+                不要只给一句笼统结论，也不要把某一类的内容当成全部。
+                """);
         return sb.toString();
     }
 }

@@ -128,6 +128,16 @@ public class VectorStore {
         return best;
     }
 
+    /** 按文档与块序号取块，供邻块扩展使用。 */
+    public Chunk findChunk(String docId, int index) {
+        for (Chunk c : chunks) {
+            if (c.index() == index && c.docId().equals(docId)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
     public List<Chunk> snapshotChunks() {
         return List.copyOf(chunks);
     }
